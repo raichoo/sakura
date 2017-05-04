@@ -1,0 +1,11 @@
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+po/CMakeFiles/
+po/Makefile
+po/cmake_install.cmake
+sakura.1
+sakura.core
+src/sakura
+tags
