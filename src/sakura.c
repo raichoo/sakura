@@ -664,11 +664,6 @@ sakura_child_exited (GtkWidget *widget, void *data)
   npages = gtk_notebook_get_n_pages(GTK_NOTEBOOK(sakura.notebook));
   term = sakura_get_page_term(sakura, page);
 
-  /* Only write configuration to disk if it's the last tab */
-  if (npages==1) {
-    sakura_config_done();
-  }
-
   if (option_hold==TRUE) {
     SAY("hold option has been activated");
     return;
@@ -694,11 +689,6 @@ sakura_eof (GtkWidget *widget, void *data)
   SAY("Got EOF signal");
 
   npages = gtk_notebook_get_n_pages(GTK_NOTEBOOK(sakura.notebook));
-
-  /* Only write configuration to disk if it's the last tab */
-  if (npages==1) {
-    sakura_config_done();
-  }
 
   /* Workaround for libvte strange behaviour. There is not child-exited signal for
      the last terminal, so we need to kill it here.  Check with libvte authors about
@@ -1664,11 +1654,6 @@ sakura_close_tab (GtkWidget *widget, void *data)
   npages = gtk_notebook_get_n_pages(GTK_NOTEBOOK(sakura.notebook));
   term = sakura_get_page_term(sakura, page);
 
-  /* Only write configuration to disk if it's the last tab */
-  if (npages==1) {
-    sakura_config_done();
-  }
-
   /* Check if there are running processes for this tab. Use tcgetpgrp to compare to the shell PGID */
   pgid = tcgetpgrp(vte_pty_get_fd(vte_terminal_get_pty(VTE_TERMINAL(term->vte))));
 
@@ -1719,11 +1704,6 @@ sakura_closebutton_clicked(GtkWidget *widget, void *data)
   page = gtk_notebook_page_num(GTK_NOTEBOOK(sakura.notebook), hbox);
   term = sakura_get_page_term(sakura, page);
   npages = gtk_notebook_get_n_pages(GTK_NOTEBOOK(sakura.notebook));
-
-  /* Only write configuration to disk if it's the last tab */
-  if (npages==1) {
-    sakura_config_done();
-  }
 
   /* Check if there are running processes for this tab. Use tcgetpgrp to compare to the shell PGID */
   pgid = tcgetpgrp(vte_pty_get_fd(vte_terminal_get_pty(VTE_TERMINAL(term->vte))));
