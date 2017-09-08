@@ -765,7 +765,7 @@ sakura_config_done()
   /* Write to file IF there's been changes */
   if (sakura.config_modified) {
 
-    bool overwrite=true;
+    bool overwrite=false;
 
     if (sakura.externally_modified) {
       GtkWidget *dialog;
@@ -774,6 +774,21 @@ sakura_config_done()
       dialog=gtk_message_dialog_new(GTK_WINDOW(sakura.main_window), GTK_DIALOG_MODAL,
           GTK_MESSAGE_QUESTION, GTK_BUTTONS_YES_NO,
           _("Configuration has been modified by another process. Overwrite?"));
+
+      response=gtk_dialog_run(GTK_DIALOG(dialog));
+      gtk_widget_destroy(dialog);
+
+      if (response==GTK_RESPONSE_YES) {
+        overwrite=true;
+      } else
+        overwrite=false;
+    } else {
+      GtkWidget *dialog;
+      gint response;
+
+      dialog=gtk_message_dialog_new(GTK_WINDOW(sakura.main_window), GTK_DIALOG_MODAL,
+          GTK_MESSAGE_QUESTION, GTK_BUTTONS_YES_NO,
+          _("Configuration has been modified. Save?"));
 
       response=gtk_dialog_run(GTK_DIALOG(dialog));
       gtk_widget_destroy(dialog);
