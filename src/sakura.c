@@ -77,16 +77,15 @@
         "-GtkDialog-button-spacing : 12;\n"\
         "}"
 
-#define NUM_COLORSETS 6
 
 static struct {
   GtkWidget *main_window;
   GtkWidget *notebook;
   GtkWidget *menu;
   PangoFontDescription *font;
-  GdkRGBA forecolors[NUM_COLORSETS];
-  GdkRGBA backcolors[NUM_COLORSETS];
-  GdkRGBA curscolors[NUM_COLORSETS];
+  GdkRGBA colorset_fore;
+  GdkRGBA colorset_back;
+  GdkRGBA colorset_curs;
   GdkRGBA palette[PALETTE_SIZE];
   char *current_match;
   guint width;
@@ -125,7 +124,6 @@ static struct {
   char *icon;
   char *word_chars;                /* Exceptions for word selection */
   gchar *tab_default_title;
-  gint last_colorset;
   gint add_tab_accelerator;
   gint del_tab_accelerator;
   gint switch_tab_accelerator;
@@ -146,7 +144,6 @@ static struct {
   gint fullscreen_key;
   gint increase_font_size_key;
   gint decrease_font_size_key;
-  gint set_colorset_keys[NUM_COLORSETS];
   GRegex *http_regexp;
   Display *dpy;
   char *argv[3];
@@ -161,7 +158,6 @@ struct terminal {
   gchar *label_text;
   bool label_set_byuser;
   GtkBorder padding;   /* inner-property data */
-  int colorset;
 };
 
 
@@ -203,11 +199,6 @@ struct terminal {
 #define DEFAULT_INCREASE_FONT_SIZE_KEY GDK_KEY_plus
 #define DEFAULT_DECREASE_FONT_SIZE_KEY GDK_KEY_minus
 #define DEFAULT_SCROLLABLE_TABS TRUE
-
-/* make this an array instead of #defines to get a compile time
- * error instead of a runtime if NUM_COLORSETS changes */
-static int cs_keys[NUM_COLORSETS] =
-    {GDK_KEY_F1, GDK_KEY_F2, GDK_KEY_F3, GDK_KEY_F4, GDK_KEY_F5, GDK_KEY_F6};
 
 #define ERROR_BUFFER_LENGTH 256
 const char cfg_group[] = "sakura";
@@ -293,7 +284,6 @@ static void     sakura_set_size(void);
 static void     sakura_set_keybind(const gchar *, guint);
 static guint    sakura_get_keybind(const gchar *);
 static void     sakura_config_done();
-static void     sakura_set_colorset (int);
 static void     sakura_set_colors (void);
 
 /* Globals for command line parameters */
@@ -313,7 +303,6 @@ static const char *option_geometry;
 static char *option_config_file;
 static gboolean option_fullscreen;
 static gboolean option_maximize;
-static gint option_colorset;
 
 static GOptionEntry entries[] = {
   { "version", 'v', 0, G_OPTION_ARG_NONE, &option_version, N_("Print version number"), NULL },
@@ -334,7 +323,6 @@ static GOptionEntry entries[] = {
   { "fullscreen", 's', 0, G_OPTION_ARG_NONE, &option_fullscreen, N_("Fullscreen mode"), NULL },
   { "geometry", 0, 0, G_OPTION_ARG_STRING, &option_geometry, N_("X geometry specification"), NULL },
   { "config-file", 0, 0, G_OPTION_ARG_FILENAME, &option_config_file, N_("Use alternate configuration file"), NULL },
-  { "colorset", 0, 0, G_OPTION_ARG_INT, &option_colorset, N_("Select initial colorset"), NULL },
   { NULL }
 };
 
@@ -968,10 +956,10 @@ sakura_set_colors ()
   for (i = (n_pages - 1); i >= 0; i--) {
     term = sakura_get_page_term(sakura, i);
     vte_terminal_set_colors(VTE_TERMINAL(term->vte),
-                            &sakura.forecolors[term->colorset],
-                            &sakura.backcolors[term->colorset],
+                            &sakura.colorset_fore,
+                            &sakura.colorset_back,
                             sakura.palette, PALETTE_SIZE);
-    vte_terminal_set_color_cursor(VTE_TERMINAL(term->vte), &sakura.curscolors[term->colorset]);
+    vte_terminal_set_color_cursor(VTE_TERMINAL(term->vte), &sakura.colorset_curs);
   }
 
 }
@@ -1030,9 +1018,9 @@ sakura_color_dialog (GtkWidget *widget, void *data)
   int cs;
   int i;
   gchar combo_text[3];
-  GdkRGBA temp_fore[NUM_COLORSETS];
-  GdkRGBA temp_back[NUM_COLORSETS];
-  GdkRGBA temp_curs[NUM_COLORSETS];
+  GdkRGBA temp_fore;
+  GdkRGBA temp_back;
+  GdkRGBA temp_curs;
 
   page = gtk_notebook_get_current_page(GTK_NOTEBOOK(sakura.notebook));
   term = sakura_get_page_term(sakura, page);
@@ -1061,11 +1049,6 @@ sakura_color_dialog (GtkWidget *widget, void *data)
   hbox_sets=gtk_box_new(FALSE, 12);
   set_label=gtk_label_new(_("Colorset"));
   set_combo=gtk_combo_box_text_new();
-  for(cs=0; cs<NUM_COLORSETS; cs++){
-    g_snprintf(combo_text, 2, "%d", cs+1);
-    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(set_combo), NULL, combo_text);
-  }
-  gtk_combo_box_set_active(GTK_COMBO_BOX(set_combo), term->colorset);
 
   /* Foreground and background and cursor color buttons */
   hbox_fore=gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 12);
@@ -1074,13 +1057,13 @@ sakura_color_dialog (GtkWidget *widget, void *data)
   label1=gtk_label_new(_("Foreground color"));
   label2=gtk_label_new(_("Background color"));
   label3=gtk_label_new(_("Cursor color"));
-  buttonfore=gtk_color_button_new_with_rgba(&sakura.forecolors[term->colorset]);
-  buttonback=gtk_color_button_new_with_rgba(&sakura.backcolors[term->colorset]);
-  buttoncurs=gtk_color_button_new_with_rgba(&sakura.curscolors[term->colorset]);
+  buttonfore=gtk_color_button_new_with_rgba(&sakura.colorset_fore);
+  buttonback=gtk_color_button_new_with_rgba(&sakura.colorset_back);
+  buttoncurs=gtk_color_button_new_with_rgba(&sakura.colorset_curs);
 
   /* Opacity control */
   hbox_opacity=gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 12);
-  spinner_adj = gtk_adjustment_new ((sakura.backcolors[term->colorset].alpha)*100, 0.0, 99.0, 1.0, 5.0, 0);
+  spinner_adj = gtk_adjustment_new ((sakura.colorset_back.alpha)*100, 0.0, 99.0, 1.0, 5.0, 0);
   opacity_spin = gtk_spin_button_new(GTK_ADJUSTMENT(spinner_adj), 1.0, 0);
   opacity_label = gtk_label_new(_("Opacity level (%)"));
   gtk_box_pack_start(GTK_BOX(hbox_opacity), opacity_label, FALSE, FALSE, 12);
@@ -1109,9 +1092,9 @@ sakura_color_dialog (GtkWidget *widget, void *data)
   g_object_set_data(G_OBJECT(color_dialog), "buttonback", buttonback);
   g_object_set_data(G_OBJECT(color_dialog), "buttoncurs", buttoncurs);
   g_object_set_data(G_OBJECT(color_dialog), "opacity_spin", opacity_spin);
-  g_object_set_data(G_OBJECT(color_dialog), "fore", temp_fore);
-  g_object_set_data(G_OBJECT(color_dialog), "back", temp_back);
-  g_object_set_data(G_OBJECT(color_dialog), "curs", temp_curs);
+  g_object_set_data(G_OBJECT(color_dialog), "fore", &temp_fore);
+  g_object_set_data(G_OBJECT(color_dialog), "back", &temp_back);
+  g_object_set_data(G_OBJECT(color_dialog), "curs", &temp_curs);
 
   g_signal_connect(G_OBJECT(buttonfore), "color-set", G_CALLBACK(sakura_color_dialog_changed), color_dialog );
   g_signal_connect(G_OBJECT(buttonback), "color-set", G_CALLBACK(sakura_color_dialog_changed), color_dialog );
@@ -1119,46 +1102,32 @@ sakura_color_dialog (GtkWidget *widget, void *data)
   g_signal_connect(G_OBJECT(set_combo), "changed", G_CALLBACK(sakura_color_dialog_changed), color_dialog );
   g_signal_connect(G_OBJECT(opacity_spin), "changed", G_CALLBACK(sakura_color_dialog_changed), color_dialog );
 
-  for(i=0; i<NUM_COLORSETS; i++) {
-    temp_fore[i] = sakura.forecolors[i];
-    temp_back[i] = sakura.backcolors[i];
-    temp_curs[i] = sakura.curscolors[i];
-  }
+  temp_fore = sakura.colorset_fore;
+  temp_back = sakura.colorset_back;
+  temp_curs = sakura.colorset_curs;
 
   response=gtk_dialog_run(GTK_DIALOG(color_dialog));
 
   if (response==GTK_RESPONSE_ACCEPT) {
     /* Save all colorsets to both the global struct and configuration.*/
-    for( i=0; i<NUM_COLORSETS; i++) {
-      char name[20];
-      gchar *cfgtmp;
+    gchar *cfgtmp;
 
-      sakura.forecolors[i]=temp_fore[i];
-      sakura.backcolors[i]=temp_back[i];
-      sakura.curscolors[i]=temp_curs[i];
+    sakura.colorset_fore=temp_fore;
+    sakura.colorset_back=temp_back;
+    sakura.colorset_curs=temp_curs;
 
-      sprintf(name, "colorset%d_fore", i+1);
-      cfgtmp=gdk_rgba_to_string(&sakura.forecolors[i]);
-      sakura_set_config_string(name, cfgtmp);
-      g_free(cfgtmp);
+    cfgtmp=gdk_rgba_to_string(&sakura.colorset_fore);
+    sakura_set_config_string("colorset_fore", cfgtmp);
+    g_free(cfgtmp);
 
-      sprintf(name, "colorset%d_back", i+1);
-      cfgtmp=gdk_rgba_to_string(&sakura.backcolors[i]);
-      sakura_set_config_string(name, cfgtmp);
-      g_free(cfgtmp);
+    cfgtmp=gdk_rgba_to_string(&sakura.colorset_back);
+    sakura_set_config_string("colorset_back", cfgtmp);
+    g_free(cfgtmp);
 
-      sprintf(name, "colorset%d_curs", i+1);
-      cfgtmp=gdk_rgba_to_string(&sakura.curscolors[i]);
-      sakura_set_config_string(name, cfgtmp);
-      g_free(cfgtmp);
-    }
+    cfgtmp=gdk_rgba_to_string(&sakura.colorset_curs);
+    sakura_set_config_string("colorset_curs", cfgtmp);
+    g_free(cfgtmp);
 
-    /* Apply the new colorsets to all tabs
-     * Set the current tab's colorset to the last selected one in the dialog.
-     * This is probably what the new user expects, and the experienced user
-     * hopefully will not mind. */
-    term->colorset = gtk_combo_box_get_active(GTK_COMBO_BOX(set_combo));
-    sakura_set_config_integer("last_colorset", term->colorset+1);
     sakura_set_colors();
   }
 
@@ -1168,46 +1137,38 @@ sakura_color_dialog (GtkWidget *widget, void *data)
 static void
 sakura_fade_out()
 {
-    GdkRGBA x = sakura.forecolors[sakura.last_colorset-1];
+    GdkRGBA x = sakura.colorset_fore;
     if( (x.red + x.green + x.blue) / 3.0 > 0.5)  {
-        for( int i=0; i<NUM_COLORSETS; i++) {
-            GdkRGBA x = sakura.forecolors[i];
-            x.red = x.red/100.0 * FADE_PERCENT;
-            x.green = x.green/100.0 * FADE_PERCENT;
-            x.blue = x.blue/100.0 * FADE_PERCENT;
-            sakura.forecolors[i]=x;
-        }
+        GdkRGBA x = sakura.colorset_fore;
+        x.red = x.red/100.0 * FADE_PERCENT;
+        x.green = x.green/100.0 * FADE_PERCENT;
+        x.blue = x.blue/100.0 * FADE_PERCENT;
+        sakura.colorset_fore=x;
     } else {
-        for( int i=0; i<NUM_COLORSETS; i++) {
-            GdkRGBA x = sakura.forecolors[i];
-            x.red = 1.0-x.red/100.0 * FADE_PERCENT;
-            x.green = 1.0-x.green/100.0 * FADE_PERCENT;
-            x.blue = 1.0-x.blue/100.0 * FADE_PERCENT;
-            sakura.forecolors[i]=x;
-        }
+        GdkRGBA x = sakura.colorset_fore;
+        x.red = 1.0-x.red/100.0 * FADE_PERCENT;
+        x.green = 1.0-x.green/100.0 * FADE_PERCENT;
+        x.blue = 1.0-x.blue/100.0 * FADE_PERCENT;
+        sakura.colorset_fore=x;
     }
 }
 
 static void
 sakura_fade_in()
 {
-    GdkRGBA x = sakura.forecolors[sakura.last_colorset-1];
+    GdkRGBA x = sakura.colorset_fore;
     if( (x.red + x.green + x.blue) / 3.0 > 0.5)  {
-        for( int i=0; i<NUM_COLORSETS; i++) {
-            GdkRGBA x = sakura.forecolors[i];
-            x.red = x.red/FADE_PERCENT * 100.0;
-            x.green = x.green/FADE_PERCENT * 100.0;
-            x.blue = x.blue/FADE_PERCENT * 100.0;
-            sakura.forecolors[i]=x;
-        }
+        GdkRGBA x = sakura.colorset_fore;
+        x.red = x.red/FADE_PERCENT * 100.0;
+        x.green = x.green/FADE_PERCENT * 100.0;
+        x.blue = x.blue/FADE_PERCENT * 100.0;
+        sakura.colorset_fore=x;
     } else {
-        for( int i=0; i<NUM_COLORSETS; i++) {
-            GdkRGBA x = sakura.forecolors[i];
-            x.red = 1.0-x.red/FADE_PERCENT * 100.0;
-            x.green = 1.0-x.green/FADE_PERCENT * 100.0;
-            x.blue = 1.0-x.blue/FADE_PERCENT * 100.0;
-            sakura.forecolors[i]=x;
-        }
+        GdkRGBA x = sakura.colorset_fore;
+        x.red = 1.0-x.red/FADE_PERCENT * 100.0;
+        x.green = 1.0-x.green/FADE_PERCENT * 100.0;
+        x.blue = 1.0-x.blue/FADE_PERCENT * 100.0;
+        sakura.colorset_fore=x;
     }
 }
 
@@ -1808,44 +1769,26 @@ sakura_init()
    * doesn't exist, but we have just read it!
    */
 
-  for( i=0; i<NUM_COLORSETS; i++) {
-    char temp_name[20];
-
-    sprintf(temp_name, "colorset%d_fore", i+1);
-    if (!g_key_file_has_key(sakura.cfg, cfg_group, temp_name, NULL)) {
-      sakura_set_config_string(temp_name, "rgb(192,192,192)");
-    }
-    cfgtmp = g_key_file_get_value(sakura.cfg, cfg_group, temp_name, NULL);
-    gdk_rgba_parse(&sakura.forecolors[i], cfgtmp);
-    g_free(cfgtmp);
-
-    sprintf(temp_name, "colorset%d_back", i+1);
-    if (!g_key_file_has_key(sakura.cfg, cfg_group, temp_name, NULL)) {
-      sakura_set_config_string(temp_name, "rgba(0,0,0,1)");
-    }
-    cfgtmp = g_key_file_get_value(sakura.cfg, cfg_group, temp_name, NULL);
-    gdk_rgba_parse(&sakura.backcolors[i], cfgtmp);
-    g_free(cfgtmp);
-
-    sprintf(temp_name, "colorset%d_curs", i+1);
-    if (!g_key_file_has_key(sakura.cfg, cfg_group, temp_name, NULL)) {
-      sakura_set_config_string(temp_name, "rgb(255,255,255)");
-    }
-    cfgtmp = g_key_file_get_value(sakura.cfg, cfg_group, temp_name, NULL);
-    gdk_rgba_parse(&sakura.curscolors[i], cfgtmp);
-    g_free(cfgtmp);
-
-    sprintf(temp_name, "colorset%d_key", i+1);
-    if (!g_key_file_has_key(sakura.cfg, cfg_group, temp_name, NULL)) {
-      sakura_set_keybind(temp_name, cs_keys[i]);
-    }
-    sakura.set_colorset_keys[i]= sakura_get_keybind(temp_name);
+  if (!g_key_file_has_key(sakura.cfg, cfg_group, "colorset_fore", NULL)) {
+    sakura_set_config_string("colorset_fore", "rgb(192,192,192)");
   }
+  cfgtmp = g_key_file_get_value(sakura.cfg, cfg_group, "colorset_fore", NULL);
+  gdk_rgba_parse(&sakura.colorset_fore, cfgtmp);
+  g_free(cfgtmp);
 
-  if (!g_key_file_has_key(sakura.cfg, cfg_group, "last_colorset", NULL)) {
-    sakura_set_config_integer("last_colorset", 1);
+  if (!g_key_file_has_key(sakura.cfg, cfg_group, "colorset_back", NULL)) {
+    sakura_set_config_string("colorset_back", "rgba(0,0,0,1)");
   }
-  sakura.last_colorset = g_key_file_get_integer(sakura.cfg, cfg_group, "last_colorset", NULL);
+  cfgtmp = g_key_file_get_value(sakura.cfg, cfg_group, "colorset_back", NULL);
+  gdk_rgba_parse(&sakura.colorset_back, cfgtmp);
+  g_free(cfgtmp);
+
+  if (!g_key_file_has_key(sakura.cfg, cfg_group, "colorset_curs", NULL)) {
+    sakura_set_config_string("colorset_curs", "rgb(255,255,255)");
+  }
+  cfgtmp = g_key_file_get_value(sakura.cfg, cfg_group, "colorset_curs", NULL);
+  gdk_rgba_parse(&sakura.colorset_curs, cfgtmp);
+  g_free(cfgtmp);
 
   for( i=0; i<16; i++) {
     char temp_name[12];
@@ -2127,10 +2070,6 @@ sakura_init()
 
   if (option_font) {
     sakura.font=pango_font_description_from_string(option_font);
-  }
-
-  if (option_colorset && option_colorset>0 && option_colorset <= NUM_COLORSETS) {
-    sakura.last_colorset=option_colorset;
   }
 
   /* These options are exclusive */
@@ -2621,16 +2560,12 @@ sakura_add_tab()
   gtk_box_pack_start(GTK_BOX(term->hbox), term->vte, TRUE, TRUE, 0);
   gtk_box_pack_start(GTK_BOX(term->hbox), term->scrollbar, FALSE, FALSE, 0);
 
-  term->colorset=sakura.last_colorset-1;
-
   /* Select the directory to use for the new tab */
   index = gtk_notebook_get_current_page(GTK_NOTEBOOK(sakura.notebook));
   if(index >= 0) {
     struct terminal *prev_term;
     prev_term = sakura_get_page_term( sakura, index );
     cwd = sakura_get_term_cwd( prev_term );
-
-    term->colorset = prev_term->colorset;
   }
   if (!cwd)
     cwd = g_get_current_dir();
@@ -2813,9 +2748,8 @@ sakura_add_tab()
   vte_terminal_set_cursor_blink_mode (VTE_TERMINAL(term->vte), sakura.blinking_cursor ? VTE_CURSOR_BLINK_ON : VTE_CURSOR_BLINK_OFF);
   vte_terminal_set_allow_bold (VTE_TERMINAL(term->vte), sakura.allow_bold ? TRUE : FALSE);
   vte_terminal_set_cursor_shape (VTE_TERMINAL(term->vte), sakura.cursor_type);
-  vte_terminal_set_color_cursor(VTE_TERMINAL(term->vte), &sakura.curscolors[term->colorset]);
-  vte_terminal_set_colors(VTE_TERMINAL(term->vte), &sakura.forecolors[term->colorset], &sakura.backcolors[term->colorset],
-                          sakura.palette, PALETTE_SIZE);
+  vte_terminal_set_color_cursor(VTE_TERMINAL(term->vte), &sakura.colorset_curs);
+  vte_terminal_set_colors(VTE_TERMINAL(term->vte), &sakura.colorset_fore, &sakura.colorset_back, sakura.palette, PALETTE_SIZE);
 
   /* FIXME: Possible race here. Find some way to force to process all configure
    * events before setting keep_fc again to false */
