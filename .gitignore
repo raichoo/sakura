@@ -9,3 +9,5 @@ sakura.1
 sakura.core
 src/sakura
 tags
+po/*.mo
+po/sakura.pot
