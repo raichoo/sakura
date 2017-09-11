@@ -135,7 +135,6 @@ static struct {
   gint open_url_accelerator;
   gint font_size_accelerator;
   gint set_tab_name_accelerator;
-  gint set_colorset_accelerator;
   gint add_tab_key;
   gint del_tab_key;
   gint prev_tab_key;
@@ -465,16 +464,6 @@ sakura_key_press (GtkWidget *widget, GdkEventKey *event, gpointer user_data)
     return TRUE;
   }
 
-  /* Change in colorset */
-  if ( (event->state & sakura.set_colorset_accelerator)==sakura.set_colorset_accelerator ) {
-    int i;
-    for(i=0; i<NUM_COLORSETS; i++) {
-      if (keycode==sakura_tokeycode(sakura.set_colorset_keys[i])){
-        sakura_set_colorset(i);
-        return TRUE;
-      }
-    }
-  }
   return FALSE;
 }
 
@@ -967,23 +956,6 @@ sakura_set_name_dialog (GtkWidget *widget, void *data)
 
   gtk_widget_destroy(input_dialog);
 }
-
-static void
-sakura_set_colorset (int cs)
-{
-  gint page;
-  struct terminal *term;
-
-  if (cs<0 || cs>= NUM_COLORSETS)
-    return;
-
-  page = gtk_notebook_get_current_page(GTK_NOTEBOOK(sakura.notebook));
-  term = sakura_get_page_term(sakura, page);
-  term->colorset=cs;
-
-  sakura_set_colors();
-}
-
 
 /* Set the terminal colors for all notebook tabs */
 static void
@@ -2085,11 +2057,6 @@ sakura_init()
     sakura_set_keybind("fullscreen_key", DEFAULT_FULLSCREEN_KEY);
   }
   sakura.fullscreen_key = sakura_get_keybind("fullscreen_key");
-
-  if (!g_key_file_has_key(sakura.cfg, cfg_group, "set_colorset_accelerator", NULL)) {
-    sakura_set_config_integer("set_colorset_accelerator", DEFAULT_SELECT_COLORSET_ACCELERATOR);
-  }
-  sakura.set_colorset_accelerator = g_key_file_get_integer(sakura.cfg, cfg_group, "set_colorset_accelerator", NULL);
 
   if (!g_key_file_has_key(sakura.cfg, cfg_group, "icon_file", NULL)) {
     sakura_set_config_string("icon_file", ICON_FILE);
